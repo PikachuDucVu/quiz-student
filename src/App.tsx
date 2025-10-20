@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { LuBrain } from "react-icons/lu";
+
+const BASE_URL_API = "http://localhost:3000";
 
 function App() {
   const [isReady, setIsReady] = useState(false);
@@ -9,28 +11,26 @@ function App() {
   const [questions, setQuestions] = useState<
     { question: string; options: string[]; answer: string }[]
   >([]);
+  const answersRef = useRef<string[]>([]);
 
   const fetchQuestions = useCallback(async () => {
-    const res = await fetch(
-      "https://organic-space-halibut-p4g6qp5j76qcrr96-3000.app.github.dev/getQuestionnaires",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const res = await fetch(`${BASE_URL_API}/getQuestionnaires`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
     const data = (await res.json()) as {
-      questions: {
+      questionnaires: {
         question: string;
         options: string[];
         answer: string;
       }[];
     };
-    setQuestions(data.questions);
+    setQuestions(data.questionnaires);
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (currentAnswer === "") return;
 
     // if (currentAnswer === questions[currentQuestionIndex].answer) {
@@ -39,13 +39,53 @@ function App() {
 
     setCurrentAnswer("");
     setCurrentQuestionIndex((prev) => prev + 1);
+    answersRef.current.push(currentAnswer);
 
     if (currentQuestionIndex === questions.length - 1) {
-      alert(`Quiz kết thúc! Điểm của bạn: ${score + 1}/${questions.length}`);
-      setCurrentQuestionIndex(0);
-      setScore(0);
+      // alert(`Quiz kết thúc! Điểm của bạn: ${score + 1}/${questions.length}`);
+      // setCurrentQuestionIndex(0);
+      // setScore(0);
+      console.log(answersRef.current);
+      // Call API gửi answersRef.current lên server
+
+      // ========== SERVER ==========
+      // Viết API nộp bài quiz, path: POST:/submit-quiz
+      // body { answers: string[] }
+      // Kiểm tra đáp án có đúng với câu trả lời trong mảng questionnaires hay không
+      // Trả về { success: true, score: number, totalQuestions: number }
+
+      if (answersRef.current.length !== questions.length) {
+        alert("Đã có lỗi xảy ra. Vui lòng thử lại!");
+        return;
+      }
+
+      const res = await fetch(`${BASE_URL_API}/submit-quiz`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ answers: answersRef.current }),
+      });
+      const data = (await res.json()) as {
+        success: boolean;
+        score: number;
+        totalQuestions: number;
+        message?: string;
+      };
+
+      if (data.success) {
+        alert(
+          `Quiz kết thúc! Điểm của bạn: ${data.score}/${data.totalQuestions}`
+        );
+      } else {
+        if (data.message) {
+          alert(data.message);
+        } else {
+          alert("Đã có lỗi xảy ra. Vui lòng thử lại!");
+        }
+      }
     }
-  }, [currentAnswer, currentQuestionIndex, questions, score]);
+  }, [currentAnswer, currentQuestionIndex, questions]);
 
   const handleStartQuiz = useCallback(() => {
     fetchQuestions();
